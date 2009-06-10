@@ -23,11 +23,17 @@ import datetime
 import sha
 
 from django.conf import settings
-from django.contrib.auth.models import User
+
+try:
+    user_model = get_model(*settings.CUSTOM_USER_MODEL.split('.', 2))
+except AttributeError:
+    from django.contrib.auth.models import User as user_model
+
 from django.core import mail
 from django.core import management
 from django.core.urlresolvers import reverse
 from django.test import TestCase
+from django.db.models import get_model
 
 from registration import forms
 from registration.models import RegistrationProfile
@@ -102,7 +108,7 @@ class RegistrationModelTests(RegistrationTestCase):
                              self.sample_user.pk)
         
         # The activated user must now be active.
-        self.failUnless(User.objects.get(pk=self.sample_user.pk).is_active)
+        self.failUnless(user_model.objects.get(pk=self.sample_user.pk).is_active)
         
         # The activation key must now be reset to the "already activated" constant.
         self.failUnlessEqual(RegistrationProfile.objects.get(user=self.sample_user).activation_key,
@@ -156,7 +162,7 @@ class RegistrationModelTests(RegistrationTestCase):
     def test_signals(self):
         """
         Test that the ``user_registered`` and ``user_activated``
-        signals are sent, and that they send the ``User`` as an
+        signals are sent, and that they send the ``user_model`` as an
         argument.
         
         """

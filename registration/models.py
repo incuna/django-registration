@@ -3,16 +3,21 @@ import random
 import re
 
 from django.conf import settings
-from django.contrib.auth.models import User
 from django.contrib.sites.models import Site
 from django.db import models
 from django.db import transaction
 from django.template.loader import render_to_string
 from django.utils.hashcompat import sha_constructor
 from django.utils.translation import ugettext_lazy as _
+from django.db.models import get_model
 
 
 SHA1_RE = re.compile('^[a-f0-9]{40}$')
+
+try:
+    user_model = get_model(*settings.CUSTOM_USER_MODEL.split('.', 2))
+except AttributeError:
+    from django.contrib.auth.models import User as user_model
 
 
 class RegistrationManager(models.Manager):
@@ -27,14 +32,14 @@ class RegistrationManager(models.Manager):
     def activate_user(self, activation_key):
         """
         Validate an activation key and activate the corresponding
-        ``User`` if valid.
+        ``user_model`` if valid.
         
-        If the key is valid and has not expired, return the ``User``
+        If the key is valid and has not expired, return the ``user_model``
         after activating.
         
         If the key is not valid or has expired, return ``False``.
         
-        If the key is valid but the ``User`` is already active,
+        If the key is valid but the ``user_model`` is already active,
         return ``False``.
         
         To prevent reactivation of an account which has been
@@ -42,10 +47,10 @@ class RegistrationManager(models.Manager):
         reset to the string constant ``RegistrationProfile.ACTIVATED``
         after successful activation.
 
-        To execute customized logic when a ``User`` is activated,
+        To execute customized logic when a ``user_model`` is activated,
         connect a function to the signal
         ``registration.signals.user_activated``; this signal will be
-        sent (with the ``User`` as the value of the keyword argument
+        sent (with the ``user_model`` as the value of the keyword argument
         ``user``) after a successful activation.
         
         """
@@ -70,11 +75,12 @@ class RegistrationManager(models.Manager):
         return False
     
     def create_inactive_user(self, username, password, email,
+                             extra_attributes=None,
                              send_email=True):
         """
-        Create a new, inactive ``User``, generate a
+        Create a new, inactive ``user_model``, generate a
         ``RegistrationProfile`` and email its activation key to the
-        ``User``, returning the new ``User``.
+        ``user_model``, returning the new ``user_model``.
         
         To disable the email, call with ``send_email=False``.
 
@@ -99,19 +105,23 @@ class RegistrationManager(models.Manager):
             ``site`` will be the currently-active
             ``django.contrib.sites.models.Site`` instance.
 
-        To execute customized logic once the new ``User`` has been
+        To execute customized logic once the new ``user_model`` has been
         created, connect a function to the signal
         ``registration.signals.user_registered``; this signal will be
-        sent (with the new ``User`` as the value of the keyword
-        argument ``user``) after the ``User`` and
+        sent (with the new ``user_model`` as the value of the keyword
+        argument ``user``) after the ``user_model`` and
         ``RegistrationProfile`` have been created, and the email (if
-        any) has been sent..
+        any) has been sent.
         
         """
         from registration.signals import user_registered
 
-        new_user = User.objects.create_user(username, email, password)
+
+        new_user = user_model.objects.create_user(username, email, password)
         new_user.is_active = False
+        if extra_attributes:
+            for attr, val in extra_attributes.items():
+                setattr(new_user, attr, val)
         new_user.save()
         
         registration_profile = self.create_profile(new_user)
@@ -138,10 +148,10 @@ class RegistrationManager(models.Manager):
     def create_profile(self, user):
         """
         Create a ``RegistrationProfile`` for a given
-        ``User``, and return the ``RegistrationProfile``.
+        ``user_model``, and return the ``RegistrationProfile``.
         
         The activation key for the ``RegistrationProfile`` will be a
-        SHA1 hash, generated from a combination of the ``User``'s
+        SHA1 hash, generated from a combination of the ``user_model``'s
         username and a random salt.
         
         """
@@ -153,13 +163,13 @@ class RegistrationManager(models.Manager):
     def delete_expired_users(self):
         """
         Remove expired instances of ``RegistrationProfile`` and their
-        associated ``User``s.
+        associated ``user_model``s.
         
         Accounts to be deleted are identified by searching for
         instances of ``RegistrationProfile`` with expired activation
-        keys, and then checking to see if their associated ``User``
+        keys, and then checking to see if their associated ``user_model``
         instances have the field ``is_active`` set to ``False``; any
-        ``User`` who is both inactive and has an expired activation
+        ``user_model`` who is both inactive and has an expired activation
         key will be deleted.
         
         It is recommended that this method be executed regularly as
@@ -183,9 +193,9 @@ class RegistrationManager(models.Manager):
            those accounts will be deleted, the usernames will become
            available for use again.
         
-        If you have a troublesome ``User`` and wish to disable their
+        If you have a troublesome ``user_model`` and wish to disable their
         account while keeping it in the database, simply delete the
-        associated ``RegistrationProfile``; an inactive ``User`` which
+        associated ``RegistrationProfile``; an inactive ``user_model`` which
         does not have an associated ``RegistrationProfile`` will not
         be deleted.
         
@@ -215,7 +225,7 @@ class RegistrationProfile(models.Model):
     """
     ACTIVATED = u"ALREADY_ACTIVATED"
     
-    user = models.ForeignKey(User, unique=True, verbose_name=_('user'))
+    user = models.ForeignKey(user_model, unique=True, verbose_name=_('user'))
     activation_key = models.CharField(_('activation key'), max_length=40)
     
     objects = RegistrationManager()

@@ -2,9 +2,14 @@
 Forms and validation code for user registration.
 
 """
+from django.db.models import get_model
+from django.conf import settings
 
+try:
+    user_model = get_model(*settings.CUSTOM_USER_MODEL.split('.', 2))
+except AttributeError:
+    from django.contrib.auth.models import User as user_model
 
-from django.contrib.auth.models import User
 from django import forms
 from django.utils.translation import ugettext_lazy as _
 
@@ -27,7 +32,7 @@ class RegistrationForm(forms.Form):
     
     Subclasses should feel free to add any additional validation they
     need, but should either preserve the base ``save()`` or implement
-    a ``save()`` method which returns a ``User``.
+    a ``save()`` method which returns a ``user_model``.
     
     """
     username = forms.RegexField(regex=r'^\w+$',
@@ -49,8 +54,8 @@ class RegistrationForm(forms.Form):
         
         """
         try:
-            user = User.objects.get(username__iexact=self.cleaned_data['username'])
-        except User.DoesNotExist:
+            user = user_model.objects.get(username__iexact=self.cleaned_data['username'])
+        except user_model.DoesNotExist:
             return self.cleaned_data['username']
         raise forms.ValidationError(_(u'This username is already taken. Please choose another.'))
 
@@ -69,14 +74,17 @@ class RegistrationForm(forms.Form):
     
     def save(self):
         """
-        Create the new ``User`` and ``RegistrationProfile``, and
-        returns the ``User`` (by calling
+        Create the new ``user_model`` and ``RegistrationProfile``, and
+        returns the ``user_model`` (by calling
         ``RegistrationProfile.objects.create_inactive_user()``).
         
         """
-        new_user = RegistrationProfile.objects.create_inactive_user(username=self.cleaned_data['username'],
-                                                                    password=self.cleaned_data['password1'],
-                                                                    email=self.cleaned_data['email'])
+        attributes = {
+            'username': self.cleaned_data['username'],
+            'password': self.cleaned_data['password1'],
+            'email': self.cleaned_data['email'],
+        }
+        new_user = RegistrationProfile.objects.create_inactive_user(**attributes)
         return new_user
 
 
@@ -103,7 +111,7 @@ class RegistrationFormUniqueEmail(RegistrationForm):
         site.
         
         """
-        if User.objects.filter(email__iexact=self.cleaned_data['email']):
+        if user_model.objects.filter(email__iexact=self.cleaned_data['email']):
             raise forms.ValidationError(_(u'This email address is already in use. Please supply a different email address.'))
         return self.cleaned_data['email']
 

@@ -9,16 +9,25 @@ from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect
 from django.shortcuts import render_to_response
 from django.template import RequestContext
+from django.db.models import get_model
 
 from registration.forms import RegistrationForm
 from registration.models import RegistrationProfile
+
+try:
+    RFC = settings.REGISTRATION_FORM_CLASS.split('.')
+    _temp = __import__(".".join(RFC[:-1]), globals(), locals(), [RFC[-1]], -1)
+    registration_form_class = getattr(_temp, RFC[-1])
+    del RFC, _temp
+except AttributeError:
+    from registration.forms import RegistrationForm as registration_form_class
 
 
 def activate(request, activation_key,
              template_name='registration/activate.html',
              extra_context=None):
     """
-    Activate a ``User``'s account from an activation key, if their key
+    Activate a ``user_model``'s account from an activation key, if their key
     is valid and hasn't expired.
     
     By default, use the template ``registration/activate.html``; to
@@ -29,7 +38,7 @@ def activate(request, activation_key,
     
     ``activation_key``
        The activation key to validate and use for activating the
-       ``User``.
+       ``user_model``.
     
     **Optional arguments**
        
@@ -74,7 +83,7 @@ def activate(request, activation_key,
 
 
 def register(request, success_url=None,
-             form_class=RegistrationForm,
+             form_class=registration_form_class,
              template_name='registration/registration_form.html',
              extra_context=None):
     """
@@ -87,11 +96,13 @@ def register(request, success_url=None,
     change this, point that named pattern at another URL, or pass your
     preferred URL as the keyword argument ``success_url``.
     
-    By default, ``registration.forms.RegistrationForm`` will be used
+    By default, the form given by the ``REGISTRATION_FORM_CLASS``
+    setting will be used as the registration form, with
+    ``registration.forms.RegistrationForm` used if this is not defined.
     as the registration form; to change this, pass a different form
     class as the ``form_class`` keyword argument. The form class you
     specify must have a method ``save`` which will create and return
-    the new ``User``.
+    the new ``user_model``.
     
     By default, use the template
     ``registration/registration_form.html``; to change this, pass the
