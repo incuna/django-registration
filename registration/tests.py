@@ -23,6 +23,7 @@ import datetime
 import sha
 
 from django.conf import settings
+from django.db.models import get_model
 
 try:
     user_model = get_model(*settings.CUSTOM_USER_MODEL.split('.', 2))
